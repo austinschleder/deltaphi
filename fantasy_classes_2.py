@@ -20,8 +20,8 @@ class League:
         
         self.player_db = self.create_player_db()
         self.team_array = self.create_teams(nicknames)
-        self.rosters = self.create_rosters(self.player_db)
-        [self.team_array[t].set_roster(self.rosters[t]) for t in xrange(league_size)]
+        self.rosters = self.create_rosters(self.player_db, self.roster_slots)
+        [self.team_array[t].set_roster(self.rosters[t]) for t in xrange(self.league_size)]
 
     def create_player_db(self):
         scoring_vector = np.asarray(self.scoring_settings)
@@ -36,10 +36,9 @@ class League:
         team_array = [self.Team(nicknames[t]) for t in xrange(self.league_size)]
         return team_array
 
-    def create_rosters(self, player_database):
+    def create_rosters(self, player_database, roster_slots):
         pdb = player_database
         league_size = self.league_size
-        roster_slots = ['qb1', 'rb1', 'rb2', 'wr1', 'wr2', 'wr3', 'te1']
         player_pool = []
         for slot in roster_slots:
             subset = pdb.get_position_tier(slot, league_size)
@@ -107,6 +106,7 @@ class League:
 
         def __repr__(self):
             s = self.player_array
+            #return '{}'.format(s)
             return 'qb1: {}; rb1: {}; rb2: {}; wr1: {}; wr2: {}; wr3: {}; te1: {}'.format(s[0], s[1], s[2], s[3], s[4], s[5], s[6])
 
 
