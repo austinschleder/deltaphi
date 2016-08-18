@@ -16,7 +16,6 @@ GAME_LOGS = gl
 league1 = fc.League(GAME_LOGS, LEAGUE_SIZE, ROSTER, SCORING_VALUES, SEASON_LENGTH, NICKNAMES)
 print(league1.player_db)
 [print(t) for t in league1.team_array]
-#[print(p) for p in league1.player_db.get_players(5)]
 #[print(r) for r in league1.rosters]
 
 def show_consistency_breakdown():

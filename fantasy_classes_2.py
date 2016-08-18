@@ -20,7 +20,7 @@ class League:
         
         self.player_db = self.create_player_db()
         self.team_array = self.create_teams(nicknames)
-        self.rosters = self.create_rosters(self.player_db.database)
+        self.rosters = self.create_rosters(self.player_db)
         [self.team_array[t].set_roster(self.rosters[t]) for t in xrange(league_size)]
 
     def create_player_db(self):
@@ -38,32 +38,15 @@ class League:
 
     def create_rosters(self, player_database):
         pdb = player_database
-        roster_positions = ['qb', 'rb', 'wr', 'te']
-        position_rankings = []
-        for pos in roster_positions:
-            subset = [p for p in pdb if p.slot == pos]
-            subset.sort(key=lambda x: x.points_per_gp, reverse=True)
-            position_rankings.append(subset)
-        return self.randomize_assignments(position_rankings, self.league_size)
-
-    def randomize_assignments(self, position_rankings, league_size):
-        starts = [0, league_size, 2*league_size]
-        ends = [league_size, 2*league_size, 3*league_size]
-        qb1s = position_rankings[0][starts[0]:ends[0]]
-        rb1s = position_rankings[1][starts[0]:ends[0]]
-        rb2s = position_rankings[1][starts[1]:ends[1]]
-        wr1s = position_rankings[2][starts[0]:ends[0]]
-        wr2s = position_rankings[2][starts[1]:ends[1]]
-        wr3s = position_rankings[2][starts[2]:ends[2]]
-        te1s = position_rankings[3][starts[0]:ends[0]]
-        random.shuffle(qb1s)
-        random.shuffle(rb1s)
-        random.shuffle(rb2s)
-        random.shuffle(wr1s)
-        random.shuffle(wr2s)
-        random.shuffle(wr3s)
-        random.shuffle(te1s)
-        rosters = [self.Roster([qb1s[t], rb1s[t], rb2s[t], wr1s[t], wr2s[t], wr3s[t], te1s[t]]) for t in xrange(league_size)]
+        league_size = self.league_size
+        roster_slots = ['qb1', 'rb1', 'rb2', 'wr1', 'wr2', 'wr3', 'te1']
+        player_pool = []
+        for slot in roster_slots:
+            subset = pdb.get_position_tier(slot, league_size)
+            random.shuffle(subset)
+            player_pool.append(subset)
+        player_pool_inverse = np.asarray(player_pool).T.tolist()
+        rosters = [self.Roster(player_pool_inverse[t]) for t in xrange(league_size)]
         return rosters
 
     class Team:
@@ -82,9 +65,9 @@ class League:
     class Player:
         'Player description'
 
-        def __init__(self, name, slot, scoring_array):
+        def __init__(self, name, position, scoring_array):
             self.name = name
-            self.slot = slot
+            self.position = position
             self.scoring_array = scoring_array
             self.gp = len(scoring_array)
             self.points_per_gp = sum(scoring_array)/len(scoring_array)
@@ -92,7 +75,7 @@ class League:
             self.consistency = self.utility/self.points_per_gp
 
         def __repr__(self):
-            return '{}: {} ({}) - {:.2f}/{:.2f}/{:.2f}'.format(self.__class__.__name__, self.name, self.slot, self.points_per_gp, self.utility, self.consistency)
+            return '{}: {} ({}) - {:.2f}/{:.2f}/{:.2f}'.format(self.__class__.__name__, self.name, self.position, self.points_per_gp, self.utility, self.consistency)
 
     class Player_DB:
         'Player Database description'
@@ -103,8 +86,15 @@ class League:
         def __repr__(self):
             return '{}: {} players'.format(self.__class__.__name__, len(self.database))
 
-        def get_players(self, num_players):
-            return self.database[:num_players]
+        def get_position_tier(self, slot, league_size):
+            pdb = self.database
+            pos, tier = convert_slot_to_position(slot)
+            tier_start = (tier-1)*league_size
+            tier_end = (tier)*league_size
+            position_players = [p for p in pdb if p.position == pos]
+            position_players.sort(key=lambda x: x.points_per_gp, reverse=True)
+            position_tier = position_players[tier_start:tier_end]
+            return position_tier
 
         def print_player_info(self, num_players):
             [print(p) for p in self.database[:num_players]]
@@ -129,3 +119,12 @@ def get_certainty_equivalent(scoring_array):
     gp = len(scoring_array)
     ce = np.expm1(sum(np.log1p(scoring_array))/gp)
     return ce
+
+def convert_slot_to_position(slot):
+    position = slot[:2]
+    tier = int(slot[2:])
+    return position, tier 
+
+def convert_position_to_slot(position, tier):
+    slot = position + str(tier)
+    return slot
