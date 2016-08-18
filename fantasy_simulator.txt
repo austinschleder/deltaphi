@@ -1,0 +1,57 @@
+###############
+## Top level ##
+###############
+
+Create a hypothetical world using stats from the 2015 NFL season.
+Entities include players, rosters, leagues, matchups, and seasons.
+
+Classes:
+Player - name, position, week-by-week stats
+Roster - ordered list of Players (1 per slot in LINEUP)
+League - full set of rosters (using LEAGUE_SIZE)
+Matchup - simulate one set of scores (one score per Player per Roster), compare overall scores against other teams in League to get 'expected_wins'
+Season - full set of Matchups
+
+Settings:
+SCORING_VALUES - [
+	pass_yd = .04, 
+	pass_td = 6, 
+	pass_int = -2, 
+	rush_yd = 0.1, 
+	rush_td = 6, 
+	recs = 0, 
+	rec_yard = 0.1, 
+	rec_td = 6
+]
+LINEUP - [qb1, rb1, rb2, wr1, wr2, wr3, te1]
+LEAGUE_SIZE - 10
+SEASON_LENGTH - 16
+INJURY_HANDLING - 'remove_zeros'|'leave_zeros'|'estimate_score'
+DRAFT_METHOD - 'random'|'clairvoyant'|'adp'
+
+Steps:
+-- Create player database
+	-- Read in game logs for each player each week
+	-- Calculate scores
+	-- Rollup by player
+	-- Create scoring_array that contains all of player's scoring possibilities
+		-- Accounts for INJURY_HANDLING
+	-- Calculate overall metrics (points_per_game, utility_per_game, consistency)
+-- Whittle player database down to a pool (for example, top 10 qbs for a 1-qb, 10-team league)
+	-- Sort players descending by value, drop everybody who does not have a starting slot
+	-- Assign position_tier to each player (top 10 rbs are rb1, 11-20 rbs are rb2)
+	-- Output: list of lists [position_tier][player]
+-- Create rosters by assigning players to teams (for example, random assignment)
+	-- Shuffle positions of each inner list. Each index represents one team.
+-- Simulate season
+	-- Calculate scores for each player
+	-- Team score equals sum of player scores
+	-- Each team's expected_wins = probability of winning (=week_rank/LEAGUE_SIZE)
+	-- Repeat SEASON_LENGTH times
+-- Calculate final league standings and team stats (rank, expected_wins, total_points, total_utility)
+	-- Sum expected_wins; sort descending to find rank; does it correlate better with points or utility?
+
+
+
+
+
