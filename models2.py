@@ -33,7 +33,7 @@ class League:
         return Player_DB(player_array)
 
     def create_teams(self, nicknames):
-        team_array = [self.Team(nicknames[t]) for t in xrange(self.league_size)]
+        team_array = [Team(nicknames[t]) for t in xrange(self.league_size)]
         return team_array
 
     def create_rosters(self, player_database, roster_slots):
