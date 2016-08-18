@@ -1,5 +1,5 @@
 from __future__ import print_function
-from src import models2 as fs
+import models2 as fs
 import pandas as pd
 import numpy as np
 
