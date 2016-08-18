@@ -1,5 +1,5 @@
 from __future__ import print_function
-import fantasy_classes_2 as fc
+from src import models2 as fs
 import pandas as pd
 import numpy as np
 
@@ -13,7 +13,7 @@ gl = pd.read_csv('2015_nfl_weekly_stats.csv')
 gl['position'] = np.where(gl['position'] == 10.0, 'qb', np.where(gl['position'] == 20.0, 'rb', np.where(gl['position'] == 30.0, 'wr', np.where(gl['position'] == 40.0, 'te', 'other'))))
 GAME_LOGS = gl
 
-league1 = fc.League(GAME_LOGS, LEAGUE_SIZE, ROSTER_SLOTS, SCORING_VALUES, SEASON_LENGTH, NICKNAMES)
+league1 = fs.League(GAME_LOGS, LEAGUE_SIZE, ROSTER_SLOTS, SCORING_VALUES, SEASON_LENGTH, NICKNAMES)
 print(league1.player_db)
 [print(t) for t in league1.team_array]
 #[print(r) for r in league1.rosters]

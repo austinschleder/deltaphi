@@ -98,6 +98,25 @@ class League:
         def print_player_info(self, num_players):
             [print(p) for p in self.database[:num_players]]
 
+    class Season:
+        'Season description'
+
+        def __init__(self, league_size, roster_slots, season_length):
+            self.league_size = league_size
+            self.roster_slots = roster_slots
+            self.season_length = season_length
+
+        def create_rosters(self, player_database, roster_slots, league_size):
+            pdb = player_database
+            player_pool = []
+            for slot in roster_slots:
+                subset = pdb.get_position_tier(slot, league_size)
+                random.shuffle(subset)
+                player_pool.append(subset)
+            player_pool_inverse = np.asarray(player_pool).T.tolist()
+            rosters = [self.Roster(player_pool_inverse[t]) for t in xrange(league_size)]
+            return rosters
+
     class Roster:
         'Roster description'
 
@@ -106,7 +125,6 @@ class League:
 
         def __repr__(self):
             s = self.player_array
-            #return '{}'.format(s)
             return 'qb1: {}; rb1: {}; rb2: {}; wr1: {}; wr2: {}; wr3: {}; te1: {}'.format(s[0], s[1], s[2], s[3], s[4], s[5], s[6])
 
 
