@@ -18,12 +18,3 @@ print(league1.player_db)
 [print(t) for t in league1.team_array]
 #[print(r) for r in league1.rosters]
 
-def show_consistency_breakdown():
-	consistent_player = league1.Player('Consistent', 'ex', [10.0, 10.0, 10.0, 10.0])
-	consistent_player.display_player_stats()
-	neutral_player = league1.Player('Neutral', 'ex', [4.0, 8.0, 12.0, 16.0])
-	neutral_player.display_player_stats()
-	risky_player = league1.Player('Risky', 'ex', [0.0, 0.0, 20.0, 20.0])
-	risky_player.display_player_stats()
-#show_consistency_breakdown()
-
