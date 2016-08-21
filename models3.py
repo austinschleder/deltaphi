@@ -78,7 +78,7 @@ class League:
             season_length = s.season_length
             for p in players:
                 p.update_scoring_output(s.season_id, [random.choice(p.scoring_array) for i in xrange(season_length)])
-                #p.update_scoring_output(s.season_id, [p.scoring_array[i%len(p.scoring_array)] for i in xrange(season_length)])
+                #p.update_scoring_output(s.season_id, [p.scoring_array[i] for i in xrange(season_length)])
 
     def calculate_team_scores(self):
         seasons = self.seasons
@@ -117,6 +117,7 @@ class League:
         players = self.players
         league_size = len(self.teams)
         [p.update_average_team_ranking(sum(p.team_rankings.values())/float(len(p.team_rankings))) for p in players]
+        [p.update_harmonic_team_ranking(len(p.team_rankings)/sum([1.0/(10-r) for r in p.team_rankings.values()])) for p in players]
         [p.update_champion_pct(sum([1 for tr in p.team_rankings.values() if tr == (league_size-1)])/float(len(p.team_rankings))) for p in players]
 
 class Player_DB:
@@ -127,11 +128,11 @@ class Player_DB:
     """
     id = 1
 
-    def __init__(self, game_logs, scoring_categories, scoring_values):
+    def __init__(self, game_logs, scoring_categories, scoring_values, season_length, injury_handling):
         self.db_id = 'DB' + str(Player_DB.id)
         Player_DB.id += 1
         pdb = analyze_game_logs(game_logs, scoring_categories, scoring_values)
-        self.players = create_players_from_pdb(pdb)
+        self.players = create_players_from_pdb(pdb, season_length, injury_handling)
         self.has_tiers = False
 
     def __str__(self):
@@ -163,17 +164,20 @@ class Player:
     """
     id = 1
 
-    def __init__(self, name, position, scoring_array):
+    def __init__(self, name, position, scoring_array, injury_handling, season_length):
         self.player_id = 'P' + str(Player.id).zfill(3)
         Player.id += 1
         self.name = name
         self.position = position
-        self.scoring_array = scoring_array
+        self.historic_scoring_array = scoring_array
         self.points = sum(scoring_array)
         self.gp = len(scoring_array)
-        self.points_per_gp = sum(scoring_array)/len(scoring_array)
-        self.utility = get_certainty_equivalent(scoring_array)
+        self.scoring_array = generate_scoring_array(scoring_array, injury_handling, season_length)
+        self.points_per_gp = sum(self.scoring_array)/len(self.scoring_array)
+        self.utility = get_certainty_equivalent(self.scoring_array)
         self.consistency = self.utility/self.points_per_gp
+        self.median_score = np.median(scoring_array)
+        self.harmonic_score = len(scoring_array) / sum([1/(abs(s)+.001) for s in scoring_array])
         self.slot = position
         self.position_rank = 0
         self.team_assignments = {}
@@ -183,10 +187,11 @@ class Player:
         self.season_consistency = {}
         self.team_rankings = {}
         self.average_team_ranking = []
+        self.harmonic_team_ranking = []
         self.champion_pct = []
 
     def __str__(self):
-        return '{} {}: {:20s} ({}) -- {:.2f} = {:5.2f} / {:5.2f} -- {} ({})'.format(self.__class__.__name__, self.player_id, self.name, self.slot, self.consistency, self.utility, self.points_per_gp, str(self.average_team_ranking[0]), str(self.champion_pct[0]))
+        return '{} {}: {:20s} ({}) -- Avg Rank: {:4.2f} | Hrm Rank: {:4.2f} | C Pct: {:.2f} | P: {:5.2f} | U: {:5.2f} | Md: {:5.2f} | H: {:5.2f}'.format(self.__class__.__name__, self.player_id, self.name, self.slot, self.average_team_ranking[0], self.harmonic_team_ranking[0], self.champion_pct[0], self.points_per_gp, self.utility, self.median_score, self.harmonic_score)
 
     def set_slot(self, slot):
         self.slot = slot
@@ -210,6 +215,9 @@ class Player:
 
     def update_average_team_ranking(self, average_rank):
         self.average_team_ranking.append(average_rank)
+
+    def update_harmonic_team_ranking(self, harmonic_rank):
+        self.harmonic_team_ranking.append(harmonic_rank)
 
     def update_champion_pct(self, champion_pct):
         self.champion_pct.append(champion_pct)
@@ -302,8 +310,8 @@ def analyze_game_logs(game_logs, scoring_categories, scoring_values):
     pdb = gl.groupby(['player', 'position'], as_index=False)['points'].apply(list).reset_index(name='scoring_array')
     return pdb
 
-def create_players_from_pdb(pdb):
-    players = [Player(pdb['player'][p], pdb['position'][p], pdb['scoring_array'][p]) for p in xrange(len(pdb))]
+def create_players_from_pdb(pdb, season_length, injury_handling):
+    players = [Player(pdb['player'][p], pdb['position'][p], pdb['scoring_array'][p], season_length, injury_handling) for p in xrange(len(pdb))]
     return players
 
 def create_teams(league_size, nicknames):
@@ -320,6 +328,23 @@ def set_position_tiers(players, position, league_size):
     slot_assignments = [convert_position_to_slot(position, t) for t in tier_assignments]
     [players[i].set_slot(slot_assignments[i]) for i in range(num_players)]
     [players[i].set_position_rank(i+1) for i in range(num_players)]
+
+def generate_scoring_array(scoring_array, season_length, injury_handling='zeros'):
+    gp = len(scoring_array)
+    games_missed = season_length - gp
+    score_avg = np.average(scoring_array)
+    score_std = np.std(scoring_array)+.01
+    if games_missed:
+        if injury_handling == 'zeros':
+            [scoring_array.append(0) for i in xrange(games_missed)]
+        elif injury_handling == 'recycle':
+            [scoring_array.append(random.choice(scoring_array)) for i in xrange(games_missed)]
+        elif injury_handling == 'impute':
+            [scoring_array.append(np.absolute(np.random.normal(score_avg, score_std))) for i in xrange(games_missed)]
+        else:
+            print('Options for handling injuries include "zeros", "recycle", or "impute".')
+    random.shuffle(scoring_array)
+    return scoring_array
 
 def get_certainty_equivalent(scoring_array):
     'Used in Player class to evaluate consistency'

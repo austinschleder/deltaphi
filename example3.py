@@ -3,22 +3,23 @@ import models3 as fs
 import pandas as pd
 import numpy as np
 
-LEAGUE_SIZE = 6
+LEAGUE_SIZE = 10
 ROSTER_POSITIONS = ['qb', 'rb', 'wr', 'te']
 ROSTER_SLOTS = ['qb1', 'rb1', 'rb2', 'wr1', 'wr2', 'wr3', 'te1']
-MINIMUM_GAMES_PLAYED = 8
+MINIMUM_GAMES_PLAYED = 10
 SEASON_LENGTH = 16
 SCORING_CATEGORIES = ['pass_yards', 'pass_tds', 'pass_ints', 'rush_yards', 'rush_tds', 'recs', 'rec_yards', 'rec_tds']
 SCORING_VALUES = [0.04, 6.0, -2.0, 0.1, 6.0, 0.0, 0.1, 6.0]
 NUM_SEASONS = 1000
 NICKNAMES = ['Raiders', 'Seahawks', 'Colts', 'Chiefs', 'Chargers', 'Broncos', 'Cardinals', 'Packers', 'Bills', 'Rams', 'Bears', 'Falcons']
+INJURY_HANDLING = 'recycle'
 
 gl = pd.read_csv('2015_nfl_weekly_stats.csv')
 gl['position'] = np.where(gl['position'] == 10.0, 'qb', np.where(gl['position'] == 20.0, 'rb', np.where(gl['position'] == 30.0, 'wr', np.where(gl['position'] == 40.0, 'te', 'other'))))
 GAME_LOGS = gl
 
 ## Create Player_DB
-player_db = fs.Player_DB(gl, SCORING_CATEGORIES, SCORING_VALUES)
+player_db = fs.Player_DB(gl, SCORING_CATEGORIES, SCORING_VALUES, SEASON_LENGTH, INJURY_HANDLING)
 player_db.set_tiers(ROSTER_POSITIONS, LEAGUE_SIZE, MINIMUM_GAMES_PLAYED)
 print(player_db)
 
@@ -38,13 +39,19 @@ print(league1)
 #print('Utility+Champ', np.corrcoef([p.utility for p in league1.players], [p.champion_pct[0] for p in league1.players])[0][1])
 
 
-[print(p) for p in sorted(league1.get_slot_players('qb1'), key=lambda x: x.average_team_ranking[0], reverse=True)]
-[print(p) for p in sorted(league1.get_slot_players('rb1'), key=lambda x: x.average_team_ranking[0], reverse=True)]
-[print(p) for p in sorted(league1.get_slot_players('rb2'), key=lambda x: x.average_team_ranking[0], reverse=True)]
-[print(p) for p in sorted(league1.get_slot_players('wr1'), key=lambda x: x.average_team_ranking[0], reverse=True)]
-[print(p) for p in sorted(league1.get_slot_players('wr2'), key=lambda x: x.average_team_ranking[0], reverse=True)]
-[print(p) for p in sorted(league1.get_slot_players('wr3'), key=lambda x: x.average_team_ranking[0], reverse=True)]
-[print(p) for p in sorted(league1.get_slot_players('te1'), key=lambda x: x.average_team_ranking[0], reverse=True)]
+[print(p) for p in sorted(league1.get_slot_players('qb1'), key=lambda x: x.champion_pct[0], reverse=True)]
+print('--------------------------------------------------------------------------------------')
+[print(p) for p in sorted(league1.get_slot_players('rb1'), key=lambda x: x.champion_pct[0], reverse=True)]
+print('--------------------------------------------------------------------------------------')
+[print(p) for p in sorted(league1.get_slot_players('rb2'), key=lambda x: x.champion_pct[0], reverse=True)]
+print('--------------------------------------------------------------------------------------')
+[print(p) for p in sorted(league1.get_slot_players('wr1'), key=lambda x: x.champion_pct[0], reverse=True)]
+print('--------------------------------------------------------------------------------------')
+[print(p) for p in sorted(league1.get_slot_players('wr2'), key=lambda x: x.champion_pct[0], reverse=True)]
+print('--------------------------------------------------------------------------------------')
+[print(p) for p in sorted(league1.get_slot_players('wr3'), key=lambda x: x.champion_pct[0], reverse=True)]
+print('--------------------------------------------------------------------------------------')
+[print(p) for p in sorted(league1.get_slot_players('te1'), key=lambda x: x.champion_pct[0], reverse=True)]
 
 
 #[print(t) for t in league1.teams[:5]]
