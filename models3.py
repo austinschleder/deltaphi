@@ -26,11 +26,14 @@ class League:
         self.seasons = seasons
         self.roster_slots = roster_slots
         self.season_length = season_length
+        self.league_size = len(teams)
 
         self.set_rosters()
         self.generate_player_scores()
         self.calculate_team_scores()
+        self.calculate_weekly_stats()
         self.calculate_season_stats()
+        self.calculate_player_value()
 
     def __str__(self):
         return '{} {}: {} players, {} teams, {} seasons'.format(self.__class__.__name__, self.league_id, len(self.players), len(self.teams), len(self.seasons))
@@ -47,6 +50,10 @@ class League:
     def get_position_players(self, position):
         position_players = [p for p in self.players if p.position == position]
         return position_players
+
+    def get_slot_players(self, slot):
+        slot_players = [p for p in self.players if p.slot == slot]
+        return slot_players
 
     def set_rosters(self):
         seasons = self.seasons
@@ -71,6 +78,7 @@ class League:
             season_length = s.season_length
             for p in players:
                 p.update_scoring_output(s.season_id, [random.choice(p.scoring_array) for i in xrange(season_length)])
+                #p.update_scoring_output(s.season_id, [p.scoring_array[i%len(p.scoring_array)] for i in xrange(season_length)])
 
     def calculate_team_scores(self):
         seasons = self.seasons
@@ -82,7 +90,7 @@ class League:
                 weekly_output = [sum(p.scoring_output[s.season_id][i] for p in players if p.team_assignments[s.season_id] == t.team_id) for i in xrange(season_length)]
                 t.update_scoring_output(s.season_id, weekly_output)
 
-    def calculate_season_stats(self):
+    def calculate_weekly_stats(self):
         seasons = self.seasons
         teams = self.teams
         for s in seasons:
@@ -92,6 +100,24 @@ class League:
             matchup_rankings_by_team = map(list, zip(*matchup_rankings_by_week))
             [s.update_team_rankings_weekly(teams[i].team_id, matchup_rankings_by_team[i]) for i in xrange(league_size)]
 
+    def calculate_season_stats(self):
+        seasons = self.seasons
+        teams = self.teams
+        players = self.players
+        league_size = self.league_size
+        for s in seasons:
+            season_length = s.season_length
+            [s.update_team_win_pct(t.team_id, float(sum(s.team_rankings[t.team_id]))/((league_size-1)*season_length)) for t in teams]
+            team_ids = [t.team_id for t in teams]
+            final_team_ranks = numpy_rank([s.team_win_pct[t.team_id] for t in teams])
+            [s.update_final_team_ranks(team_id, rank) for team_id, rank in zip(team_ids, final_team_ranks)]
+            [p.update_team_rankings(s.season_id, s.final_team_ranks[p.team_assignments[s.season_id]]) for p in players]
+
+    def calculate_player_value(self):
+        players = self.players
+        league_size = len(self.teams)
+        [p.update_average_team_ranking(sum(p.team_rankings.values())/float(len(p.team_rankings))) for p in players]
+        [p.update_champion_pct(sum([1 for tr in p.team_rankings.values() if tr == (league_size-1)])/float(len(p.team_rankings))) for p in players]
 
 class Player_DB:
     """
@@ -150,11 +176,17 @@ class Player:
         self.consistency = self.utility/self.points_per_gp
         self.slot = position
         self.position_rank = 0
-        self.scoring_output = {}
         self.team_assignments = {}
+        self.scoring_output = {}
+        self.average_points = {}
+        self.average_utility = {}
+        self.season_consistency = {}
+        self.team_rankings = {}
+        self.average_team_ranking = []
+        self.champion_pct = []
 
     def __str__(self):
-        return '{} {}: {:20s} ({}) -- {:.2f} = {:5.2f} / {:5.2f} -- {}'.format(self.__class__.__name__, self.player_id, self.name, self.slot, self.consistency, self.utility, self.points_per_gp, self.team_assignments)
+        return '{} {}: {:20s} ({}) -- {:.2f} = {:5.2f} / {:5.2f} -- {} ({})'.format(self.__class__.__name__, self.player_id, self.name, self.slot, self.consistency, self.utility, self.points_per_gp, str(self.average_team_ranking[0]), str(self.champion_pct[0]))
 
     def set_slot(self, slot):
         self.slot = slot
@@ -166,7 +198,21 @@ class Player:
         self.team_assignments.update({season_id: team_id})
 
     def update_scoring_output(self, season_id, seasonal_scoring):
+        average_points = sum(seasonal_scoring)/len(seasonal_scoring)
+        average_utility = get_certainty_equivalent(seasonal_scoring)
         self.scoring_output.update({season_id: seasonal_scoring})
+        self.average_points.update({season_id: average_points})
+        self.average_utility.update({season_id: average_utility})
+        self.season_consistency.update({season_id: average_utility/average_points})
+
+    def update_team_rankings(self, season_id, team_rank):
+        self.team_rankings.update({season_id: team_rank})
+
+    def update_average_team_ranking(self, average_rank):
+        self.average_team_ranking.append(average_rank)
+
+    def update_champion_pct(self, champion_pct):
+        self.champion_pct.append(champion_pct)
 
 class Team:
     """
@@ -182,18 +228,23 @@ class Team:
         self.nickname = nickname
         self.player_assignments = {}
         self.scoring_output = {}
+        self.average_points = {}
+        self.average_utility = {}
+        self.weekly_consistency = {}
 
     def __str__(self):
-        return '{} {}: {} -- {}'.format(self.__class__.__name__, self.team_id, self.nickname, self.scoring_output)
+        return '{} {}: {} -- {} '.format(self.__class__.__name__, self.team_id, self.nickname, self.player_assignments)
 
     def update_player_assignments(self, season_id, roster):
         self.player_assignments.update({season_id: roster})
 
     def update_scoring_output(self, season_id, seasonal_scoring):
+        average_points = sum(seasonal_scoring)/len(seasonal_scoring)
+        average_utility = get_certainty_equivalent(seasonal_scoring)
         self.scoring_output.update({season_id: seasonal_scoring})
-
-    def print_scoring_output(self):
-        print(self.team_id, ' '.join([str(x) for x in self.scoring_output['S0002']]))
+        self.average_points.update({season_id: average_points})
+        self.average_utility.update({season_id: average_utility})
+        self.weekly_consistency.update({season_id: average_utility/average_points})
 
 class Season:
     """
@@ -207,9 +258,11 @@ class Season:
         self.season_length = season_length
         self.rosters = {}
         self.team_rankings = {}
+        self.final_team_ranks = {}
+        self.team_win_pct = {}
 
     def __str__(self):
-        return '{} {}: {} teams'.format(self.__class__.__name__, self.season_id, len(self.rosters))
+        return '{} {}: {} / {}'.format(self.__class__.__name__, self.season_id, self.team_win_pct, self.final_team_ranks)
 
     def set_rosters(self, teams, players, roster_slots):
         rosters = {t.team_id: [] for t in teams}
@@ -229,6 +282,12 @@ class Season:
 
     def update_team_rankings_weekly(self, team_id, matchup_rankings_by_team):
         self.team_rankings.update({team_id: matchup_rankings_by_team})
+
+    def update_team_win_pct(self, team_id, win_pct):
+        self.team_win_pct.update({team_id: win_pct})
+
+    def update_final_team_ranks(self, team_id, rank):
+        self.final_team_ranks.update({team_id: rank})
 
     def print_team_rankings(self):
         [print(' '.join([str(x) for x in self.team_rankings[i]])) for i in ['T01', 'T02', 'T03', 'T04']]
@@ -266,6 +325,11 @@ def get_certainty_equivalent(scoring_array):
     'Used in Player class to evaluate consistency'
     gp = len(scoring_array)
     ce = np.expm1(sum(np.log1p(scoring_array))/gp)
+    #ce = np.expm1(np.expm1(sum(np.log1p(np.log1p(scoring_array)))/gp))
+    #ce = np.expm1(np.expm1(np.expm1(sum(np.log1p(np.log1p(np.log1p(scoring_array))))/gp)))
+    #ce = np.square(sum(np.sqrt(np.absolute(scoring_array)))/gp)
+    #ce = np.sqrt(sum(np.square(scoring_array))/gp)
+    #ce = np.log1p(sum(np.expm1(scoring_array))/gp)
     return ce
 
 def sort_array_descending(array, key):
