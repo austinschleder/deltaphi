@@ -214,7 +214,7 @@ class Player:
         self.champion_pct = []
 
     def __str__(self):
-        return '{} {}: {:20s} ({}) -- Avg: {:5.2f} | Hrm: {:5.2f} | Champ: {:5.2f} | P: {:5.2f} | U: {:5.2f} | C: {:5.2f}'.format(self.__class__.__name__, self.player_id, self.name, self.slot, 5 - self.average_team_ranking[0], 3.414 - self.harmonic_team_ranking[0] , self.champion_pct[0] - 0.1, self.points_per_gp_normalized, self.utility_normalized, self.consistency)
+        return '{} {}: {:20s} ({}) -- Avg: {:5.2f} | Hrm: {:5.2f} | Champ: {:5.2f} | P: {:5.2f} | U: {:5.2f} | C: {:5.2f}'.format(self.__class__.__name__, self.player_id, self.name, self.slot, 5 - self.average_team_ranking[0], 3.414 - self.harmonic_team_ranking[0] , self.champion_pct[0] - 0.1, self.points_per_gp_normalized, self.utility_normalized, self.consistency_normalized)
 
     def set_slot(self, slot):
         self.slot = slot
