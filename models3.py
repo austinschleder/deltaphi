@@ -55,21 +55,44 @@ class League:
         slot_players = [p for p in self.players if p.slot == slot]
         return slot_players
 
+    # def set_rosters(self):
+    #     'Set rosters according to slot (i.e., only the 11-20th best wrs go in a wr2 slot)'
+    #     seasons = self.seasons
+    #     teams = self.teams
+    #     players = self.players
+    #     roster_slots = self.roster_slots
+    #     for s in seasons:
+    #         rosters = {t.team_id: [] for t in teams}
+    #         num_teams = len(teams)
+    #         for slot in roster_slots:
+    #             slot_players = get_slot_players(players, slot)
+    #             assignments = zip(teams, slot_players)
+    #             [rosters[t.team_id].append(p.player_id) for t, p in assignments]
+    #             [p.update_team_assignment(s.season_id, t.team_id) for t, p in assignments]
+    #         s.rosters = rosters
+    #         [t.update_player_assignments(s.season_id, rosters[t.team_id]) for t in teams]
+
     def set_rosters(self):
+        'Set rosters without regard to slots (i.e., wr1 can go in a wr2 slot)'
         seasons = self.seasons
         teams = self.teams
         players = self.players
-        roster_slots = self.roster_slots
+        roster_positions = ['qb', 'rb', 'wr', 'te']
+        roster_openings = {'qb':1, 'rb':2, 'wr':3, 'te':1}
+        for pos in roster_positions:
+            position_players = get_position_players(players, pos)
+            calculate_position_measurements(position_players)
         for s in seasons:
             rosters = {t.team_id: [] for t in teams}
-            num_teams = len(teams)
-            for slot in roster_slots:
-                slot_players = get_slot_players(players, slot)
-                assignments = zip(teams, slot_players)
-                [rosters[t.team_id].append(p.player_id) for t, p in assignments]
-                [p.update_team_assignment(s.season_id, t.team_id) for t, p in assignments]
+            for pos in roster_positions:
+                position_players = get_position_players(players, pos)
+                team_ids = np.repeat([t.team_id for t in teams], roster_openings[pos])
+                assignments = zip(team_ids, position_players)
+                [rosters[tid].append(p.player_id) for tid, p in assignments]
+                [p.update_team_assignment(s.season_id, tid) for tid, p in assignments]
             s.rosters = rosters
             [t.update_player_assignments(s.season_id, rosters[t.team_id]) for t in teams]
+
 
     def generate_player_scores(self):
         seasons = self.seasons
@@ -77,8 +100,8 @@ class League:
         for s in seasons:
             season_length = s.season_length
             for p in players:
-                p.update_scoring_output(s.season_id, [random.choice(p.scoring_array) for i in xrange(season_length)])
-                #p.update_scoring_output(s.season_id, [p.scoring_array[i] for i in xrange(season_length)])
+                #p.update_scoring_output(s.season_id, [random.choice(p.scoring_array) for i in xrange(season_length)])
+                p.update_scoring_output(s.season_id, [p.scoring_array[i] for i in xrange(season_length)])
 
     def calculate_team_scores(self):
         seasons = self.seasons
@@ -116,7 +139,7 @@ class League:
     def calculate_player_value(self):
         players = self.players
         league_size = len(self.teams)
-        [p.update_average_team_ranking(sum(p.team_rankings.values())/float(len(p.team_rankings))) for p in players]
+        [p.update_average_team_ranking(10-sum(p.team_rankings.values())/float(len(p.team_rankings))) for p in players]
         [p.update_harmonic_team_ranking(len(p.team_rankings)/sum([1.0/(10-r) for r in p.team_rankings.values()])) for p in players]
         [p.update_champion_pct(sum([1 for tr in p.team_rankings.values() if tr == (league_size-1)])/float(len(p.team_rankings))) for p in players]
 
@@ -177,8 +200,8 @@ class Player:
         self.utility = get_certainty_equivalent(self.scoring_array)
         self.consistency = self.utility/self.points_per_gp
         self.median_score = np.median(scoring_array)
-        self.harmonic_score = len(scoring_array) / sum([1/(abs(s)+.001) for s in scoring_array])
         self.slot = position
+        self.position_averages = {}
         self.position_rank = 0
         self.team_assignments = {}
         self.scoring_output = {}
@@ -191,13 +214,22 @@ class Player:
         self.champion_pct = []
 
     def __str__(self):
-        return '{} {}: {:20s} ({}) -- Avg Rank: {:4.2f} | Hrm Rank: {:4.2f} | C Pct: {:.2f} | P: {:5.2f} | U: {:5.2f} | Md: {:5.2f} | H: {:5.2f}'.format(self.__class__.__name__, self.player_id, self.name, self.slot, self.average_team_ranking[0], self.harmonic_team_ranking[0], self.champion_pct[0], self.points_per_gp, self.utility, self.median_score, self.harmonic_score)
+        return '{} {}: {:20s} ({}) -- Avg: {:5.2f} | Hrm: {:5.2f} | Champ: {:5.2f} | P: {:5.2f} | U: {:5.2f} | C: {:5.2f}'.format(self.__class__.__name__, self.player_id, self.name, self.slot, 5 - self.average_team_ranking[0], 3.414 - self.harmonic_team_ranking[0] , self.champion_pct[0] - 0.1, self.points_per_gp_normalized, self.utility_normalized, self.consistency)
 
     def set_slot(self, slot):
         self.slot = slot
 
     def set_position_rank(self, position_rank):
         self.position_rank = position_rank
+
+    def update_position_averages(self, measurement_dict):
+        self.position_averages.update(measurement_dict)
+        self.points_per_gp_normalized = (self.points_per_gp - measurement_dict['avg_points_per_gp'])/measurement_dict['std_points_per_gp']
+        self.points_per_gp_excess = self.points_per_gp - measurement_dict['min_points_per_gp']
+        self.utility_normalized = (self.utility - measurement_dict['avg_utility'])/measurement_dict['std_utility']
+        self.utility_excess = self.utility - measurement_dict['min_utility']
+        self.consistency_normalized = (self.consistency - measurement_dict['avg_consistency'])/measurement_dict['std_consistency']
+        self.consistency_excess = self.consistency - measurement_dict['min_consistency']
 
     def update_team_assignment(self, season_id, team_id):
         self.team_assignments.update({season_id: team_id})
@@ -272,17 +304,6 @@ class Season:
     def __str__(self):
         return '{} {}: {} / {}'.format(self.__class__.__name__, self.season_id, self.team_win_pct, self.final_team_ranks)
 
-    def set_rosters(self, teams, players, roster_slots):
-        rosters = {t.team_id: [] for t in teams}
-        num_teams = len(teams)
-        for slot in roster_slots:
-            slot_players = [p for p in players if p.slot == slot]
-            random.shuffle(slot_players)
-            assignments = zip(teams, slot_players)
-            [rosters[t.team_id].append(p.player_id) for t, p in assignments]
-            [p.update_team_assignment(self.season_id, t.team_id) for t, p in assignments]
-        return rosters
-
     def generate_player_scores(self, players):
         season_length = self.season_length
         season_id = self.season_id
@@ -296,9 +317,6 @@ class Season:
 
     def update_final_team_ranks(self, team_id, rank):
         self.final_team_ranks.update({team_id: rank})
-
-    def print_team_rankings(self):
-        [print(' '.join([str(x) for x in self.team_rankings[i]])) for i in ['T01', 'T02', 'T03', 'T04']]
 
 ###############
 ## Functions ##
@@ -341,6 +359,8 @@ def generate_scoring_array(scoring_array, season_length, injury_handling='zeros'
             [scoring_array.append(random.choice(scoring_array)) for i in xrange(games_missed)]
         elif injury_handling == 'impute':
             [scoring_array.append(np.absolute(np.random.normal(score_avg, score_std))) for i in xrange(games_missed)]
+        elif injury_handling == 'normal':
+            scoring_array = [np.absolute(np.random.normal(score_avg, score_std)) for i in xrange(season_length)]
         else:
             print('Options for handling injuries include "zeros", "recycle", or "impute".')
     random.shuffle(scoring_array)
@@ -353,7 +373,7 @@ def get_certainty_equivalent(scoring_array):
     #ce = np.expm1(np.expm1(sum(np.log1p(np.log1p(scoring_array)))/gp))
     #ce = np.expm1(np.expm1(np.expm1(sum(np.log1p(np.log1p(np.log1p(scoring_array))))/gp)))
     #ce = np.square(sum(np.sqrt(np.absolute(scoring_array)))/gp)
-    #ce = np.sqrt(sum(np.square(scoring_array))/gp)
+    #ce = np.expm1(np.sqrt(sum(np.square(np.log1p(scoring_array)))/gp))
     #ce = np.log1p(sum(np.expm1(scoring_array))/gp)
     return ce
 
@@ -373,11 +393,32 @@ def sort_array_descending(array, key):
 def numpy_rank(array):
     return np.array(array).argsort().argsort()
 
+def calculate_position_measurements(position_players):
+    min_points_per_gp = min([p.points_per_gp for p in position_players])
+    avg_points_per_gp = np.average([p.points_per_gp for p in position_players])
+    std_points_per_gp = np.std([p.points_per_gp for p in position_players])
+    min_utility = min([p.utility for p in position_players])
+    avg_utility = np.average([p.utility for p in position_players])
+    std_utility = np.std([p.utility for p in position_players])
+    min_consistency = min([p.consistency for p in position_players])
+    avg_consistency = np.average([p.consistency for p in position_players])
+    std_consistency = np.std([p.consistency for p in position_players])
+    measurements = [min_points_per_gp, avg_points_per_gp, std_points_per_gp, min_utility, avg_utility, std_utility, min_consistency, avg_consistency, std_consistency]
+    measurement_names = ['min_points_per_gp', 'avg_points_per_gp', 'std_points_per_gp', 'min_utility', 'avg_utility', 'std_utility', 'min_consistency', 'avg_consistency', 'std_consistency']
+    measurement_dict = {z[0]: z[1] for z in zip(measurement_names, measurements)}
+    [p.update_position_averages(measurement_dict) for p in position_players]
+
 def get_slot_players(players, slot, method='shuffle'):
     slot_players = [p for p in players if p.slot == slot]
     if method == 'shuffle':
         random.shuffle(slot_players)
     return slot_players
+
+def get_position_players(players, position, method='shuffle'):
+    position_players = [p for p in players if p.position == position]
+    if method == 'shuffle':
+        random.shuffle(position_players)
+    return position_players
 
 def convert_slot_to_position(slot):
     position = slot[:2]
