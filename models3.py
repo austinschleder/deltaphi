@@ -79,6 +79,7 @@ class League:
         players = self.players
         roster_positions = ['qb', 'rb', 'wr', 'te']
         roster_openings = {'qb':1, 'rb':2, 'wr':3, 'te':1}
+        #roster_openings = {'qb':2, 'rb':4, 'wr':5, 'te':2}
         for pos in roster_positions:
             position_players = get_position_players(players, pos)
             calculate_position_measurements(position_players)
@@ -139,8 +140,8 @@ class League:
     def calculate_player_value(self):
         players = self.players
         league_size = len(self.teams)
-        [p.update_average_team_ranking(10-sum(p.team_rankings.values())/float(len(p.team_rankings))) for p in players]
-        [p.update_harmonic_team_ranking(len(p.team_rankings)/sum([1.0/(10-r) for r in p.team_rankings.values()])) for p in players]
+        [p.update_average_team_ranking(league_size+1-sum(p.team_rankings.values())/float(len(p.team_rankings))) for p in players]
+        [p.update_harmonic_team_ranking(len(p.team_rankings)/sum([1.0/(league_size+1-r) for r in p.team_rankings.values()])) for p in players]
         [p.update_champion_pct(sum([1 for tr in p.team_rankings.values() if tr == (league_size-1)])/float(len(p.team_rankings))) for p in players]
 
 class Player_DB:
@@ -151,10 +152,15 @@ class Player_DB:
     """
     id = 1
 
-    def __init__(self, game_logs, scoring_categories, scoring_values, season_length, injury_handling):
+    def __init__(self, game_logs_or_projections, input_type, scoring_categories, scoring_values, season_length, injury_handling):
         self.db_id = 'DB' + str(Player_DB.id)
         Player_DB.id += 1
-        pdb = analyze_game_logs(game_logs, scoring_categories, scoring_values)
+        if input_type == 'game_logs':
+            pdb = analyze_game_logs(game_logs_or_projections, scoring_categories, scoring_values)
+        elif input_type == 'season':
+            pdb = convert_projections_to_pdb(game_logs_or_projections, scoring_categories, scoring_values)
+        else:
+            print('Please select your input_type ("game_logs" or "season").')
         self.players = create_players_from_pdb(pdb, season_length, injury_handling)
         self.has_tiers = False
 
@@ -199,7 +205,6 @@ class Player:
         self.points_per_gp = sum(self.scoring_array)/len(self.scoring_array)
         self.utility = get_certainty_equivalent(self.scoring_array)
         self.consistency = self.utility/self.points_per_gp
-        self.median_score = np.median(scoring_array)
         self.slot = position
         self.position_averages = {}
         self.position_rank = 0
@@ -214,7 +219,7 @@ class Player:
         self.champion_pct = []
 
     def __str__(self):
-        return '{} {}: {:20s} ({}) -- Avg: {:5.2f} | Hrm: {:5.2f} | Champ: {:5.2f} | P: {:5.2f} | U: {:5.2f} | C: {:5.2f}'.format(self.__class__.__name__, self.player_id, self.name, self.slot, 5 - self.average_team_ranking[0], 3.414 - self.harmonic_team_ranking[0] , self.champion_pct[0] - 0.1, self.points_per_gp_normalized, self.utility_normalized, self.consistency_normalized)
+        return '{} {}: {:20s} ({}) -- Avg: {:5.2f} | Hrm: {:5.2f} | Champ: {:5.2f} | P: {:5.2f} | U: {:5.2f} | C: {:5.2f}'.format(self.__class__.__name__, self.player_id, self.name, self.slot, self.average_team_ranking[0], self.harmonic_team_ranking[0], self.champion_pct[0], self.points_per_gp_excess, self.utility_excess, self.consistency)
 
     def set_slot(self, slot):
         self.slot = slot
@@ -327,6 +332,12 @@ def analyze_game_logs(game_logs, scoring_categories, scoring_values):
     gl = game_logs[['player', 'position', 'points']]
     pdb = gl.groupby(['player', 'position'], as_index=False)['points'].apply(list).reset_index(name='scoring_array')
     return pdb
+
+def convert_projections_to_pdb(projections, scoring_categories, scoring_values):
+    projections['total_points'] = projections[scoring_categories].dot(scoring_values)
+    projections['scoring_array'] = projections['total_points'].apply(lambda x: np.repeat(x/16, 16))
+    pj = projections[['player', 'position', 'scoring_array']]
+    return pj
 
 def create_players_from_pdb(pdb, season_length, injury_handling):
     players = [Player(pdb['player'][p], pdb['position'][p], pdb['scoring_array'][p], season_length, injury_handling) for p in xrange(len(pdb))]
